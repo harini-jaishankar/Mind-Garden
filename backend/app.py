@@ -1,21 +1,31 @@
+# backend/app.py
+
 from flask import Flask, request, jsonify
+import joblib
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 
+# Load your trained model
+model = joblib.load("model.pkl")
 
-app = Flask(__name__)
-
+# Default homepage route (for browser)
 @app.route('/')
 def home():
-    return "Flask server is running."
+    return "<h2>🌱 Welcome to MindGarden Backend</h2><p>Use <code>/predict</code> with a POST request to get mood prediction.</p>"
 
+# Mood prediction route
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.get_json()
-    text = data.get("text", "")
-    return jsonify({"prediction": f"Dummy response for: {text}"})
+    try:
+        data = request.get_json()
+        text = data['text']
+        prediction = model.predict([text])[0]
+        return jsonify({'prediction': prediction})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
-if __name__ == "__main__":
-    app.run(debug=True, host="127.0.0.1", port=5000)
+if __name__ == '__main__':
+    app.run(debug=True)
+
