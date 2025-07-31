@@ -1,55 +1,46 @@
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+import pickle
+import sqlite3
+from datetime import datetime
 
-# Initialize Flask app
 app = Flask(__name__)
-CORS(app)  # Enable CORS so React frontend can communicate
+CORS(app)
 
-# Configure SQLite database
-import os
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'mood_predictions.db')}"
+# Load your ML model
+with open("model.pkl", "rb") as f:
+    model = pickle.load(f)
 
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Create the SQLite database and table if not exists
+def init_db():
+    conn = sqlite3.connect('mood_predictions.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS mood_logs
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  text TEXT,
+                  mood TEXT,
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    conn.commit()
+    conn.close()
 
-# Initialize SQLAlchemy
-db = SQLAlchemy(app)
+init_db()
 
-# Define the MoodEntry model
-class MoodEntry(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    text = db.Column(db.Text, nullable=False)
-    prediction = db.Column(db.String(50), nullable=False)
-
-# Create database tables (only runs once)
-with app.app_context():
-    db.create_all()
-    print("✅ Database tables created")
-
-# Define prediction route
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.json
-    user_text = data.get('text', '')
+    data = request.get_json()
+    text = data['text']
 
-    # Simple dummy logic for mood prediction
-    if "happy" in user_text.lower():
-        predicted_mood = "Happy 😊"
-    elif "sad" in user_text.lower():
-        predicted_mood = "Sad 😢"
-    else:
-        predicted_mood = "Neutral 😐"
+    # Predict the mood
+    prediction = model.predict([text])[0]
 
-    # Save prediction to the database
-    entry = MoodEntry(text=user_text, prediction=predicted_mood)
-    db.session.add(entry)
-    db.session.commit()
-    print("✅ Entry saved to DB")
+    # Store in database
+    conn = sqlite3.connect('mood_predictions.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO mood_logs (text, mood) VALUES (?, ?)", (text, prediction))
+    conn.commit()
+    conn.close()
 
-    return jsonify({'prediction': predicted_mood})
+    return jsonify({'prediction': prediction})
 
-# Run the Flask app
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
+    app.run(debug=True)
