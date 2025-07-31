@@ -1,46 +1,39 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pickle
-import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-# Load your ML model
-with open("model.pkl", "rb") as f:
-    model = pickle.load(f)
-
-# Create the SQLite database and table if not exists
-def init_db():
-    conn = sqlite3.connect('mood_predictions.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS mood_logs
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  text TEXT,
-                  mood TEXT,
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-    conn.commit()
-    conn.close()
-
-init_db()
+# In-memory list to store mood history
+mood_history = []
 
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.get_json()
     text = data['text']
 
-    # Predict the mood
-    prediction = model.predict([text])[0]
+    # Dummy mood prediction logic (replace with ML model later)
+    if 'happy' in text.lower():
+        prediction = 'Happy'
+    elif 'sad' in text.lower():
+        prediction = 'Sad'
+    else:
+        prediction = 'Neutral'
 
-    # Store in database
-    conn = sqlite3.connect('mood_predictions.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO mood_logs (text, mood) VALUES (?, ?)", (text, prediction))
-    conn.commit()
-    conn.close()
+    # Store prediction with timestamp
+    mood_entry = {
+        'text': text,
+        'prediction': prediction,
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    mood_history.append(mood_entry)
 
     return jsonify({'prediction': prediction})
+
+@app.route('/history', methods=['GET'])
+def history():
+    return jsonify(mood_history)
 
 if __name__ == '__main__':
     app.run(debug=True)
